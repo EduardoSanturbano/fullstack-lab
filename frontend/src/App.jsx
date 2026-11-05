@@ -1,11 +1,48 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { listEvents, register } from './api.js'
 
-// Esta tela já tem a estrutura visual. Sua tarefa é ligá-la à API e ao estado React.
-// Consulte docs/checkpoint-04.md antes de substituir os dados de exemplo.
+function slotsLabel(slots) {
+  return slots === 1 ? '1 vaga disponível' : `${slots} vagas disponíveis`
+}
+
 export default function App() {
   const [userId, setUserId] = useState(1)
-  const example = { id: 0, title: 'Exemplo de evento', date: '2026-10-10', available_slots: 2 }
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [pendingId, setPendingId] = useState(null)
+  const [success, setSuccess] = useState('')
+  const [registerError, setRegisterError] = useState('')
+
+  async function loadEvents() {
+    try {
+      setEvents(await listEvents())
+      setLoadError('')
+    } catch {
+      setLoadError('Não foi possível carregar os eventos.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadEvents()
+  }, [])
+
+  async function handleRegister(eventId) {
+    setPendingId(eventId)
+    setSuccess('')
+    setRegisterError('')
+    try {
+      await register(eventId, userId)
+      setSuccess('Inscrição realizada!')
+      await loadEvents()
+    } catch (error) {
+      setRegisterError(error.message)
+    } finally {
+      setPendingId(null)
+    }
+  }
 
   return <main className="page">
     <header>
@@ -21,13 +58,25 @@ export default function App() {
       </select>
     </label>
 
+    {success && <p role="status">{success}</p>}
+    {registerError && <p role="alert">{registerError}</p>}
+    {loadError && <p role="alert">{loadError}</p>}
+    {loading && <p>Carregando eventos...</p>}
+    {!loading && !loadError && events.length === 0 && <p>Nenhum evento disponível.</p>}
+
     <section aria-label="Lista de eventos" className="events">
-      <article className="card">
-        <p className="date">{example.date}</p>
-        <h2>{example.title}</h2>
-        <p>{example.available_slots} vagas disponíveis</p>
-        <button type="button">Inscrever-se</button>
-      </article>
+      {events.map(event => <article className="card" key={event.id}>
+        <p className="date">{event.date}</p>
+        <h2>{event.title}</h2>
+        <p>{slotsLabel(event.available_slots)}</p>
+        <button
+          type="button"
+          disabled={pendingId !== null || event.available_slots === 0}
+          onClick={() => handleRegister(event.id)}
+        >
+          {event.available_slots === 0 ? 'Sem vagas' : 'Inscrever-se'}
+        </button>
+      </article>)}
     </section>
   </main>
 }
